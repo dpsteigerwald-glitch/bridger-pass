@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Hall Pass — Scan &amp; Go</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --paper:#F3EEDD;
+    --paper-dim:#E8E1CB;
+    --ink:#1B2A38;
+    --forest:#1F3A2E;
+    --forest-dim:#294A3A;
+    --gold:#C99A2E;
+    --gold-dim:#a37f24;
+    --alert:#B23A2E;
+    --go:#3F7A54;
+    --mono: 'IBM Plex Mono', monospace;
+    --display: 'Oswald', sans-serif;
+    --body: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--forest);
+    color:var(--paper);
+    font-family:var(--body);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    -webkit-tap-highlight-color:transparent;
+    overscroll-behavior:none;
+  }
+  header{
+    padding:14px 18px 10px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:1px solid rgba(243,238,221,0.14);
+    flex-shrink:0;
+  }
+  header .brand{
+    font-family:var(--display);
+    font-weight:700;
+    letter-spacing:0.02em;
+    font-size:20px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  header .brand .stamp-dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--gold);
+    box-shadow:0 0 0 3px rgba(201,154,46,0.25);
+  }
+  header .sub{
+    font-size:11px;
+    color:rgba(243,238,221,0.55);
+    font-family:var(--mono);
+  }
+  main{
+    flex:1;
+    overflow-y:auto;
+    padding:18px;
+    padding-bottom:90px;
+  }
+  nav.tabs{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    display:flex;
+    background:var(--forest-dim);
+    border-top:1px solid rgba(243,238,221,0.14);
+    z-index:50;
+  }
+  nav.tabs button{
+    flex:1;
+    background:none;
+    border:none;
+    color:rgba(243,238,221,0.55);
+    font-family:var(--body);
+    font-weight:600;
+    font-size:13px;
+    padding:13px 4px 11px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    cursor:pointer;
+  }
+  nav.tabs button.active{ color:var(--paper); }
+  nav.tabs button.active::after{
+    content:'';
+    display:block;
+    width:22px;height:3px;
+    background:var(--gold);
+    border-radius:2px;
+    margin-top:2px;
+  }
+  nav.tabs button .icon{ font-size:18px; line-height:1; }
+
+  /* ---- Scan tab ---- */
+  .scan-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:16px;
+  }
+  .cam-frame{
+    width:100%;
+    max-width:420px;
+    aspect-ratio:1/1;
+    background:#000;
+    border-radius:18px;
+    overflow:hidden;
+    position:relative;
+    border:2px solid var(--gold-dim);
+    box-shadow: inset 0 0 0 6px rgba(0,0,0,0.35);
+  }
+  .cam-frame video{
+    width:100%;height:100%;object-fit:cover;
+    transform:scaleX(-1);
+  }
+  .cam-frame .reticle{
+    position:absolute; inset:14%;
+    border:2px dashed rgba(201,154,46,0.75);
+    border-radius:12px;
+    pointer-events:none;
+  }
+  .cam-off{
+    display:flex; align-items:center; justify-content:center;
+    height:100%; color:rgba(243,238,221,0.4);
+    font-family:var(--mono); font-size:13px; text-align:center; padding:20px;
+  }
+  .big-btn{
+    width:100%; max-width:420px;
+    background:var(--gold);
+    color:var(--ink);
+    border:none;
+    border-radius:14px;
+    font-family:var(--display);
+    font-weight:600;
+    font-size:19px;
+    letter-spacing:0.02em;
+    padding:18px;
+    cursor:pointer;
+  }
+  .big-btn:active{ background:var(--gold-dim); }
+  .big-btn.secondary{
+    background:transparent;
+    color:var(--paper);
+    border:1.5px solid rgba(243,238,221,0.3);
+  }
+
+  .stamp-card{
+    width:100%; max-width:420px;
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:14px;
+    padding:22px 20px;
+    position:relative;
+    overflow:hidden;
+    animation: stampIn 260ms cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes stampIn{
+    0%{ transform:scale(1.5) rotate(-9deg); opacity:0; }
+    100%{ transform:scale(1) rotate(0); opacity:1; }
+  }
+  .stamp-card .status-word{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:34px;
+    letter-spacing:0.03em;
+  }
+  .stamp-card.out .status-word{ color:var(--alert); }
+  .stamp-card.in .status-word{ color:var(--go); }
+  .stamp-card .name{ font-size:20px; font-weight:600; margin-top:2px; }
+  .stamp-card .meta{
+    font-family:var(--mono);
+    font-size:13px;
+    color:#555;
+    margin-top:10px;
+    border-top:1px dashed #bbb;
+    padding-top:10px;
+  }
+  .dest-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    width:100%;
+    max-width:420px;
+  }
+  .dest-row button{
+    background:var(--paper-dim);
+    color:var(--ink);
+    border:none;
+    border-radius:12px;
+    padding:16px 8px;
+    font-family:var(--body);
+    font-weight:600;
+    font-size:15px;
+    cursor:pointer;
+  }
+  .dest-row button:active{ background:var(--paper); }
+
+  /* ---- Live tab ---- */
+  .live-head{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:14px;
+  }
+  .live-head h2{ font-family:var(--display); font-size:20px; margin:0; font-weight:600; }
+  .threshold{
+    font-family:var(--mono); font-size:12px; color:rgba(243,238,221,0.6);
+    display:flex; align-items:center; gap:6px;
+  }
+  .threshold input{
+    width:44px; background:var(--forest-dim); color:var(--paper);
+    border:1px solid rgba(243,238,221,0.25); border-radius:6px; padding:4px 6px;
+    font-family:var(--mono); text-align:center;
+  }
+  .out-row{
+    background:var(--forest-dim);
+    border-radius:12px;
+    padding:12px 14px;
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:8px;
+    border-left:4px solid var(--go);
+  }
+  .out-row.over{ border-left-color:var(--alert); }
+  .out-row .who{ font-weight:600; font-size:15px; }
+  .out-row .dest{ font-size:12px; color:rgba(243,238,221,0.55); font-family:var(--mono); }
+  .out-row .time{
+    font-family:var(--mono); font-weight:600; font-size:15px;
+    color:var(--go);
+  }
+  .out-row.over .time{ color:var(--alert); }
+  .out-row button{
+    background:none; border:1px solid rgba(243,238,221,0.3); color:var(--paper);
+    border-radius:8px; padding:6px 10px; font-size:12px; margin-left:10px; cursor:pointer;
+  }
+  .empty-note{
+    text-align:center; color:rgba(243,238,221,0.4);
+    font-family:var(--mono); font-size:13px; padding:40px 10px;
+  }
+  .day-reset{
+    margin-top:18px;
+    width:100%;
+    background:none;
+    border:1px dashed rgba(178,58,46,0.6);
+    color:#e08579;
+    border-radius:10px;
+    padding:12px;
+    font-family:var(--body); font-weight:600; font-size:13px;
+    cursor:pointer;
+  }
+
+  /* ---- Roster tab ---- */
+  .add-row{
+    display:flex; gap:8px; margin-bottom:16px;
+  }
+  .add-row input{
+    flex:1;
+    background:var(--forest-dim);
+    border:1px solid rgba(243,238,221,0.25);
+    color:var(--paper);
+    border-radius:10px;
+    padding:12px 12px;
+    font-family:var(--body); font-size:15px;
+  }
+  .add-row button{
+    background:var(--gold); color:var(--ink); border:none; border-radius:10px;
+    padding:0 18px; font-weight:700; font-family:var(--display); cursor:pointer;
+  }
+  .roster-item{
+    background:var(--forest-dim);
+    border-radius:10px;
+    padding:10px 12px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:7px;
+  }
+  .roster-item .rname{ font-weight:600; font-size:14px; }
+  .roster-item .rid{ font-family:var(--mono); font-size:11px; color:rgba(243,238,221,0.5); }
+  .roster-item .ractions{ display:flex; gap:8px; }
+  .roster-item button{
+    background:none; border:1px solid rgba(243,238,221,0.25); color:var(--paper);
+    border-radius:7px; padding:5px 9px; font-size:12px; cursor:pointer;
+  }
+  .roster-item button.danger{ border-color:rgba(178,58,46,0.5); color:#e08579; }
+  .print-hint{
+    margin-top:16px; font-family:var(--mono); font-size:12px; color:rgba(243,238,221,0.5);
+    line-height:1.5;
+  }
+
+  /* ---- Print / passes ---- */
+  #printSheet{ display:none; }
+  .pass-card{
+    border:1.5px dashed #999;
+    border-radius:10px;
+    padding:10px;
+    display:inline-flex;
+    flex-direction:column;
+    align-items:center;
+    width:150px;
+    margin:6px;
+    font-family:var(--body);
+  }
+  .pass-card .pname{ font-weight:700; font-size:12px; margin-top:6px; text-align:center; }
+  .pass-card .plabel{ font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:#666; }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #printSheet, #printSheet *{ visibility:visible; }
+    #printSheet{ display:block; position:absolute; top:0; left:0; }
+  }
+
+  .toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:var(--paper);
+    padding:10px 16px; border-radius:9px; font-size:13px;
+    font-family:var(--body); font-weight:600;
+    z-index:100; opacity:0; pointer-events:none;
+    transition:opacity 200ms;
+  }
+  .toast.show{ opacity:1; }
+
+  /* ---- Staff login ---- */
+  .staff-btn{
+    background:none; border:none; color:rgba(243,238,221,0.4);
+    font-size:15px; padding:4px 6px; cursor:pointer; line-height:1;
+  }
+  .staff-btn.signed-in{ color:var(--gold); }
+  .login-wrap{
+    display:flex; flex-direction:column; align-items:center; gap:16px;
+    padding-top:10px;
+  }
+  .pin-display{
+    font-family:var(--mono); font-size:30px; letter-spacing:0.35em;
+    color:var(--paper); min-height:38px;
+  }
+  .pin-pad{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
+    width:100%; max-width:280px;
+  }
+  .pin-pad button{
+    background:var(--forest-dim); color:var(--paper); border:1px solid rgba(243,238,221,0.15);
+    border-radius:10px; font-family:var(--display); font-size:20px; padding:16px 0; cursor:pointer;
+  }
+  .pin-pad button:active{ background:var(--paper); color:var(--ink); }
+  .role-badge{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--forest-dim); border-radius:10px; padding:10px 14px;
+    margin-bottom:14px; font-size:13px;
+  }
+  .role-badge .who{ font-weight:600; }
+  .role-badge .tag{
+    font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--gold); border:1px solid rgba(201,154,46,0.4); border-radius:5px; padding:2px 6px;
+    margin-left:8px;
+  }
+  .role-badge button{
+    background:none; border:1px solid rgba(243,238,221,0.25); color:var(--paper);
+    border-radius:7px; padding:5px 10px; font-size:12px; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="stamp-dot"></span>Hall Pass</div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="sub" id="clockLine">--:--</div>
+    <button id="staffBtn" class="staff-btn" title="Staff login">🔒</button>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<nav class="tabs" id="tabsNav"></nav>
+
+<div id="toast" class="toast"></div>
+<div id="printSheet"></div>
+
+<script>
+/* ---------------- backend (Google Sheets via Apps Script) ---------------- */
+// Paste the Web app URL you get after deploying HallPassBackend.gs here:
+const API_URL = 'https://script.google.com/macros/s/AKfycbwLM7l5eyfFaqWbXaf_IEKN1KTdyztNc-XHi9id6hu3MQAOas30h99sMAj7aLan67GS/exec';
+
+async function apiGet(action, params={}){
+  const qs = new URLSearchParams({action, ...params}).toString();
+  const res = await fetch(`${API_URL}?${qs}`);
+  return res.json();
+}
+async function apiPost(action, payload={}){
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // avoids a CORS preflight
+    body: JSON.stringify({action, ...payload})
+  });
+  return res.json();
+}
+
+let roster = [];       // [{id, name}]  -- id is the student's real school ID number
+let statusBoard = {};  // { id: {out:true, outAt: iso, dest: string} }
+let history = [];      // [{id,name,outAt,inAt,durationSec,dest}]
+let thresholdMin = 10;
+let currentRole = null;  // null | 'teacher' | 'admin'
+let currentName = '';
+let authToken = null;
+let pinEntry = '';
+
+function canSee(tab){
+  if(tab==='scan') return true;
+  if(tab==='live') return currentRole==='teacher' || currentRole==='admin';
+  if(tab==='roster') return currentRole==='admin';
+  return false;
+}
+
+/* ---------------- utils ---------------- */
+function fmtClock(d){
+  return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+function fmtDur(sec){
+  const m = Math.floor(sec/60), s = sec%60;
+  return m + 'm ' + String(s).padStart(2,'0') + 's';
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+function tickClock(){
+  document.getElementById('clockLine').textContent = fmtClock(new Date());
+}
+setInterval(tickClock, 1000); tickClock();
+
+/* ---------------- tabs ---------------- */
+let activeTab = 'scan';
+const TAB_DEFS = [
+  {id:'scan', icon:'▣', label:'Scan'},
+  {id:'live', icon:'◷', label:'Live'},
+  {id:'roster', icon:'☰', label:'Roster'}
+];
+function renderNav(){
+  const nav = document.getElementById('tabsNav');
+  nav.innerHTML = '';
+  TAB_DEFS.filter(t=>canSee(t.id)).forEach(t=>{
+    const btn = document.createElement('button');
+    btn.dataset.tab = t.id;
+    if(t.id===activeTab) btn.classList.add('active');
+    btn.innerHTML = `<span class="icon">${t.icon}</span>${t.label}`;
+    btn.addEventListener('click', ()=>{
+      activeTab = t.id;
+      stopCamera();
+      renderNav();
+      render();
+    });
+    nav.appendChild(btn);
+  });
+}
+document.getElementById('staffBtn').addEventListener('click', ()=>{
+  if(currentRole){
+    // already signed in — jump straight to Live so the lock icon doubles as a shortcut
+    activeTab = canSee('live') ? 'live' : 'scan';
+    renderNav();
+    render();
+  } else {
+    renderLoginScreen();
+  }
+});
+
+function renderLoginScreen(){
+  stopCamera();
+  pinEntry = '';
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="login-wrap">
+      <div style="font-family:var(--display);font-size:18px;font-weight:600;">Staff Login</div>
+      <div class="pin-display" id="pinDisplay"></div>
+      <div class="pin-pad" id="pinPad"></div>
+      <button class="big-btn secondary" id="pinCancel">Cancel</button>
+    </div>
+  `;
+  const pad = document.getElementById('pinPad');
+  ['1','2','3','4','5','6','7','8','9','⌫','0','Go'].forEach(k=>{
+    const b = document.createElement('button');
+    b.textContent = k;
+    b.addEventListener('click', ()=> handlePinKey(k));
+    pad.appendChild(b);
+  });
+  document.getElementById('pinCancel').addEventListener('click', ()=>{ activeTab='scan'; renderNav(); render(); });
+}
+function updatePinDisplay(){
+  const d = document.getElementById('pinDisplay');
+  if(d) d.textContent = pinEntry.split('').map(()=>'•').join(' ');
+}
+async function handlePinKey(k){
+  if(k==='⌫'){ pinEntry = pinEntry.slice(0,-1); updatePinDisplay(); return; }
+  if(k==='Go'){
+    if(!pinEntry) return;
+    const result = await apiPost('login', {pin: pinEntry});
+    if(result.error){
+      showToast(result.error);
+      pinEntry = ''; updatePinDisplay();
+      return;
+    }
+    currentRole = result.role;
+    currentName = result.name || (result.role==='admin' ? 'Administrator' : 'Teacher');
+    authToken = result.token;
+    document.getElementById('staffBtn').classList.add('signed-in');
+    activeTab = canSee('live') ? 'live' : 'scan';
+    renderNav();
+    render();
+    return;
+  }
+  if(pinEntry.length < 8){ pinEntry += k; updatePinDisplay(); }
+}
+function logoutStaff(){
+  if(authToken) apiPost('logout', {token: authToken});
+  currentRole = null; currentName = ''; authToken = null;
+  document.getElementById('staffBtn').classList.remove('signed-in');
+  activeTab = 'scan';
+  renderNav();
+  render();
+}
+
+/* ---------------- camera / scanning ---------------- */
+let stream=null, scanning=false, videoEl=null, canvasEl=null, canvasCtx=null, rafId=null;
+let awaitingDestFor=null; // studentId waiting on destination pick after scan-out
+
+async function startCamera(){
+  const camFrame = document.getElementById('camFrame');
+  if(!camFrame) return;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: {ideal:'environment'} } });
+    videoEl = document.createElement('video');
+    videoEl.setAttribute('playsinline','');
+    videoEl.srcObject = stream;
+    camFrame.innerHTML = '';
+    camFrame.appendChild(videoEl);
+    const reticle = document.createElement('div');
+    reticle.className='reticle';
+    camFrame.appendChild(reticle);
+    await videoEl.play();
+    canvasEl = document.createElement('canvas');
+    canvasCtx = canvasEl.getContext('2d', {willReadFrequently:true});
+    scanning = true;
+    rafId = requestAnimationFrame(scanLoop);
+  }catch(e){
+    camFrame.innerHTML = '<div class="cam-off">Camera unavailable.<br>Allow camera access to scan passes.</div>';
+  }
+}
+function stopCamera(){
+  scanning = false;
+  if(rafId) cancelAnimationFrame(rafId);
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+}
+function scanLoop(){
+  if(!scanning) return;
+  if(videoEl && videoEl.readyState === videoEl.HAVE_ENOUGH_DATA){
+    canvasEl.width = videoEl.videoWidth;
+    canvasEl.height = videoEl.videoHeight;
+    canvasCtx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+    const img = canvasCtx.getImageData(0,0,canvasEl.width, canvasEl.height);
+    const code = jsQR(img.data, img.width, img.height);
+    if(code && code.data && code.data.startsWith('HP:')){
+      const id = code.data.slice(3);
+      handleScan(id);
+      return; // stop loop; render() will restart when appropriate
+    }
+  }
+  rafId = requestAnimationFrame(scanLoop);
+}
+
+async function handleScan(id){
+  stopCamera();
+  const result = await apiPost('scan', {id});
+  if(result.error){
+    showToast(result.error);
+    setTimeout(render, 900);
+    return;
+  }
+  if(result.mode === 'needsDest'){
+    renderDestPicker({id, name:result.name});
+  } else if(result.mode === 'in'){
+    await refreshFromStorage(false);
+    renderConfirm({mode:'in', name:result.name, durationSec:result.durationSec});
+  }
+}
+
+async function finalizeOut(student, dest){
+  const result = await apiPost('setDest', {id:student.id, dest});
+  if(result.error){ showToast(result.error); render(); return; }
+  await refreshFromStorage(false);
+  renderConfirm({mode:'out', name:result.name, dest:result.dest});
+}
+
+async function forceCheckIn(id){
+  const result = await apiPost('forceCheckIn', {id, token: authToken});
+  if(result.error){ showToast(result.error); }
+  await refreshFromStorage(false);
+  render();
+}
+
+async function dayReset(){
+  if(!confirm('Check everyone back in and close out all open passes? Use this at the end of the day.')) return;
+  await apiPost('dayReset', {token: authToken});
+  await refreshFromStorage(false);
+  render();
+}
+
+/* ---------------- rendering ---------------- */
+function render(){
+  const main = document.getElementById('main');
+  if(!canSee(activeTab)){
+    activeTab = 'scan';
+    renderNav();
+  }
+  if(activeTab==='scan') renderScan(main);
+  else if(activeTab==='live') renderLive(main);
+  else if(activeTab==='roster') renderRoster(main);
+}
+
+function renderScan(main){
+  main.innerHTML = `
+    <div class="scan-wrap">
+      <div class="cam-frame" id="camFrame"><div class="cam-off">Tap "Start Scanning" below</div></div>
+      <button class="big-btn" id="scanBtn">Start Scanning</button>
+      <div class="print-hint" style="text-align:center;">Hold the student's pass QR code up to the camera.</div>
+      <button class="big-btn secondary" id="manualBtn">No badge? Enter student # instead</button>
+    </div>
+  `;
+  document.getElementById('scanBtn').addEventListener('click', ()=>{
+    startCamera();
+  });
+  document.getElementById('manualBtn').addEventListener('click', renderManualEntry);
+}
+
+function renderManualEntry(){
+  stopCamera();
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="scan-wrap">
+      <div class="stamp-card in" style="text-align:center;">
+        <div class="status-word" style="font-size:22px;">STUDENT #</div>
+        <div class="meta">Type the student's school ID number</div>
+      </div>
+      <div class="add-row" style="max-width:420px;width:100%;">
+        <input type="text" inputmode="numeric" id="manualId" placeholder="Student ID number" autofocus>
+        <button id="manualGo">Go</button>
+      </div>
+      <button class="big-btn secondary" id="manualCancel">Cancel</button>
+    </div>
+  `;
+  const go = ()=>{
+    const val = document.getElementById('manualId').value.trim();
+    if(!val) return;
+    handleScan(val);
+  };
+  document.getElementById('manualGo').addEventListener('click', go);
+  document.getElementById('manualId').addEventListener('keydown', (ev)=>{ if(ev.key==='Enter') go(); });
+  document.getElementById('manualCancel').addEventListener('click', render);
+}
+
+function renderDestPicker(student){
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="scan-wrap">
+      <div class="stamp-card out">
+        <div class="status-word">SIGNING OUT</div>
+        <div class="name">${escapeHtml(student.name)}</div>
+        <div class="meta">Where's this pass for?</div>
+      </div>
+      <div class="dest-row">
+        <button data-d="Restroom">🚻 Restroom</button>
+        <button data-d="Nurse">🩹 Nurse</button>
+        <button data-d="Office">🏫 Office</button>
+        <button data-d="Locker">🔑 Locker</button>
+        <button data-d="Water">💧 Water</button>
+        <button data-d="Other">✎ Other</button>
+      </div>
+      <button class="big-btn secondary" id="cancelDest">Cancel</button>
+    </div>
+  `;
+  main.querySelectorAll('.dest-row button').forEach(b=>{
+    b.addEventListener('click', ()=> finalizeOut(student, b.dataset.d));
+  });
+  document.getElementById('cancelDest').addEventListener('click', render);
+}
+
+function renderConfirm({mode, name, durationSec, dest}){
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="scan-wrap">
+      <div class="stamp-card ${mode}">
+        <div class="status-word">${mode==='out' ? 'HAVE A PASS' : 'WELCOME BACK'}</div>
+        <div class="name">${escapeHtml(name)}</div>
+        <div class="meta">${
+          mode==='out'
+            ? 'Out for: ' + dest + ' &middot; ' + fmtClock(new Date())
+            : 'Gone for ' + fmtDur(durationSec) + ' &middot; back at ' + fmtClock(new Date())
+        }</div>
+      </div>
+    </div>
+  `;
+  setTimeout(render, 2200);
+}
+
+function renderLive(main){
+  const entries = Object.entries(statusBoard).map(([id, s])=>{
+    const student = roster.find(r=>r.id===id);
+    const outSec = Math.round((Date.now() - new Date(s.outAt).getTime())/1000);
+    return {id, name: student ? student.name : id, outSec, dest: s.dest||''};
+  }).sort((a,b)=> b.outSec - a.outSec);
+
+  main.innerHTML = `
+    <div class="role-badge">
+      <div class="who">${escapeHtml(currentName)}<span class="tag">${currentRole}</span></div>
+      <button id="logoutBtn">Log out</button>
+    </div>
+    <div class="live-head">
+      <h2>Out right now (${entries.length})</h2>
+      <div class="threshold">flag after <input type="number" min="1" id="threshInput" value="${thresholdMin}"> min</div>
+    </div>
+    <div id="rowsWrap"></div>
+    <button class="day-reset" id="dayResetBtn">End-of-day: close all open passes</button>
+  `;
+  document.getElementById('logoutBtn').addEventListener('click', logoutStaff);
+  const wrap = document.getElementById('rowsWrap');
+  if(entries.length===0){
+    wrap.innerHTML = `<div class="empty-note">Nobody's out. Everyone's where they should be.</div>`;
+  } else {
+    entries.forEach(e=>{
+      const over = e.outSec >= thresholdMin*60;
+      const row = document.createElement('div');
+      row.className = 'out-row' + (over?' over':'');
+      row.innerHTML = `
+        <div>
+          <div class="who">${escapeHtml(e.name)}</div>
+          <div class="dest">${escapeHtml(e.dest)}</div>
+        </div>
+        <div style="display:flex;align-items:center;">
+          <div class="time">${fmtDur(e.outSec)}</div>
+          <button data-id="${e.id}">Check in</button>
+        </div>
+      `;
+      row.querySelector('button').addEventListener('click', ()=>forceCheckIn(e.id));
+      wrap.appendChild(row);
+    });
+  }
+  document.getElementById('threshInput').addEventListener('change', (ev)=>{
+    thresholdMin = Math.max(1, parseInt(ev.target.value)||10);
+    render();
+  });
+  document.getElementById('dayResetBtn').addEventListener('click', dayReset);
+}
+
+function renderRoster(main){
+  main.innerHTML = `
+    <div class="role-badge">
+      <div class="who">${escapeHtml(currentName)}<span class="tag">${currentRole}</span></div>
+      <button id="logoutBtn2">Log out</button>
+    </div>
+    <div class="add-row">
+      <input type="text" id="newName" placeholder="Student name…" style="flex:1.4;">
+      <input type="text" inputmode="numeric" id="newSid" placeholder="Student #" style="flex:1;">
+      <button id="addBtn">Add</button>
+    </div>
+    <div id="rosterList"></div>
+    <div class="print-hint">
+      ${roster.length} student${roster.length===1?'':'s'} on roster.<br>
+      Print QR passes for lanyards/ID badges — or students can just type their student # on the Scan tab if they don't have theirs.
+    </div>
+    <button class="big-btn secondary" id="printBtn" style="margin-top:12px;">Print all QR passes</button>
+  `;
+  document.getElementById('logoutBtn2').addEventListener('click', logoutStaff);
+  const list = document.getElementById('rosterList');
+  roster.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(s=>{
+    const item = document.createElement('div');
+    item.className='roster-item';
+    item.innerHTML = `
+      <div>
+        <div class="rname">${escapeHtml(s.name)}</div>
+        <div class="rid">#${escapeHtml(s.id)}</div>
+      </div>
+      <div class="ractions">
+        <button data-act="print" data-id="${s.id}">Pass</button>
+        <button data-act="remove" data-id="${s.id}" class="danger">Remove</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('button[data-act="remove"]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      if(!confirm('Remove this student from the roster?')) return;
+      await apiPost('removeStudent', {id:b.dataset.id, token: authToken});
+      await refreshFromStorage(false);
+      render();
+    });
+  });
+  list.querySelectorAll('button[data-act="print"]').forEach(b=>{
+    b.addEventListener('click', ()=> printPasses(roster.filter(s=>s.id===b.dataset.id)));
+  });
+  document.getElementById('addBtn').addEventListener('click', addStudent);
+  document.getElementById('newName').addEventListener('keydown', (ev)=>{
+    if(ev.key==='Enter') document.getElementById('newSid').focus();
+  });
+  document.getElementById('newSid').addEventListener('keydown', (ev)=>{
+    if(ev.key==='Enter') addStudent();
+  });
+  document.getElementById('printBtn').addEventListener('click', ()=> printPasses(roster));
+}
+
+async function addStudent(){
+  const nameInput = document.getElementById('newName');
+  const sidInput = document.getElementById('newSid');
+  const name = nameInput.value.trim();
+  const sid = sidInput.value.trim();
+  if(!name || !sid) { showToast('Enter a name and student #'); return; }
+  const result = await apiPost('addStudent', {id:sid, name, token: authToken});
+  if(result.error){ showToast(result.error); return; }
+  await refreshFromStorage(false);
+  nameInput.value=''; sidInput.value='';
+  render();
+}
+
+function printPasses(students){
+  if(students.length===0){ showToast('No students to print'); return; }
+  const sheet = document.getElementById('printSheet');
+  sheet.innerHTML = '';
+  students.forEach(s=>{
+    const card = document.createElement('div');
+    card.className='pass-card';
+    const qrDiv = document.createElement('div');
+    card.appendChild(qrDiv);
+    const label = document.createElement('div');
+    label.className='plabel';
+    label.textContent='Hall Pass';
+    const nm = document.createElement('div');
+    nm.className='pname';
+    nm.textContent = s.name;
+    const sid = document.createElement('div');
+    sid.className='plabel';
+    sid.style.marginTop='2px';
+    sid.textContent = '#' + s.id;
+    card.appendChild(label);
+    card.appendChild(nm);
+    card.appendChild(sid);
+    sheet.appendChild(card);
+    new QRCode(qrDiv, { text: 'HP:'+s.id, width:96, height:96, correctLevel: QRCode.CorrectLevel.M });
+  });
+  setTimeout(()=> window.print(), 200);
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* ---------------- live refresh of "Live" tab timers ---------------- */
+setInterval(()=>{ if(activeTab==='live') render(); }, 1000);
+
+/* ---------------- poll the backend so multiple kiosks stay in sync ---------------- */
+async function refreshFromStorage(shouldRender=true){
+  try{
+    const data = await apiGet('getData');
+    if(data.error){ console.error(data.error); return; }
+    roster = data.roster; statusBoard = data.statusBoard; history = data.history;
+  }catch(e){
+    console.error('backend unreachable', e);
+    return;
+  }
+  if(!shouldRender) return;
+  const active = document.activeElement;
+  const isTypingRoster = active && (active.id==='newName' || active.id==='newSid');
+  if(activeTab==='live'){
+    render();
+  } else if(activeTab==='roster' && !isTypingRoster){
+    render();
+  }
+  // scan tab: data above is refreshed in memory either way, no need to re-render mid-scan
+}
+setInterval(()=>refreshFromStorage(true), 4000);
+
+/* ---------------- init ---------------- */
+(async function init(){
+  renderNav();
+  if(API_URL.indexOf('PASTE_YOUR') === 0){
+    document.getElementById('main').innerHTML =
+      '<div style="padding:30px;font-family:var(--body);line-height:1.6;">' +
+      'This app isn\'t connected to a backend yet. Deploy HallPassBackend.gs as a ' +
+      'Google Apps Script web app, then paste the Web app URL into the API_URL ' +
+      'constant near the top of this file\'s &lt;script&gt;.</div>';
+    return;
+  }
+  await refreshFromStorage(false);
+  render();
+})();
+</script>
+</body>
+</html>
